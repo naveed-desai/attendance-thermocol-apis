@@ -133,8 +133,19 @@ export class EmployeesService {
       throw new NotFoundException(`Invalid employee ID: ${id}`);
     }
 
+    const payload: Record<string, any> = { ...dto };
+    if (payload.password) {
+      payload.password = payload.password.trim();
+    }
+    if (payload.phone) {
+      payload.phone = payload.phone.trim();
+    }
+    if (payload.email) {
+      payload.email = payload.email.toLowerCase().trim();
+    }
+
     const updated = await this.employeeModel
-      .findByIdAndUpdate(id, { $set: dto }, { new: true })
+      .findByIdAndUpdate(id, { $set: payload }, { new: true })
       .exec();
 
     if (!updated) {
