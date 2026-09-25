@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -43,9 +44,14 @@ export class EmployeesService {
   ) {}
 
   async create(dto: CreateEmployeeDto): Promise<Employee> {
+    const cleanPhone = dto.phone.trim();
+    if (!/^[0-9]{10}$/.test(cleanPhone)) {
+      throw new BadRequestException('Phone number must be exactly 10 digits');
+    }
+
     // 1. Mandatory phone uniqueness check
     const existingPhone = await this.employeeModel
-      .findOne({ phone: dto.phone.trim() })
+      .findOne({ phone: cleanPhone })
       .exec();
     if (existingPhone) {
       throw new ConflictException('An employee with this phone number already exists');
@@ -139,6 +145,9 @@ export class EmployeesService {
     }
     if (payload.phone) {
       payload.phone = payload.phone.trim();
+      if (!/^[0-9]{10}$/.test(payload.phone)) {
+        throw new BadRequestException('Phone number must be exactly 10 digits');
+      }
     }
     if (payload.email) {
       payload.email = payload.email.toLowerCase().trim();
@@ -179,7 +188,7 @@ export class EmployeesService {
       .exec();
 
     const totalApprovedSalary = approvedAttendance.reduce(
-      (sum, item) => sum + (item.calculatedSalary || 0),
+      (sum, item) => sum + Math.floor(item.calculatedSalary || 0),
       0,
     );
 

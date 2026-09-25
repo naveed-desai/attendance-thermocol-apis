@@ -11,16 +11,17 @@ export interface ResolvedRate {
   date: string;
   dayOfWeek: string;
   isSunday: boolean;
+  baseRate8h: number;
+  bonus8h: number;
   rate8h: number;
   hourlyRate: number;
-  source: 'override' | 'employee_custom' | 'sunday_default' | 'standard_default';
+  source: 'override' | 'employee_custom' | 'standard_default';
   reason?: string;
 }
 
 @Injectable()
 export class RatesService {
   public static readonly STANDARD_RATE = 240;
-  public static readonly SUNDAY_RATE = 250;
 
   constructor(
     @InjectModel(DailyRateOverride.name)
@@ -51,52 +52,44 @@ export class RatesService {
   ): Promise<ResolvedRate> {
     const { dayOfWeek, isSunday } = this.getDayInfo(dateStr);
 
-    // 1. Check for specific date override set by Admin
+    // 1. Determine employee base daily rate (default 240 if not set)
+    const isCustom = typeof customDailyRate === 'number' && customDailyRate > 0;
+    const baseRate8h = isCustom ? customDailyRate : RatesService.STANDARD_RATE;
+    const baseSource: 'employee_custom' | 'standard_default' = isCustom
+      ? 'employee_custom'
+      : 'standard_default';
+
+    // 2. Check for date-specific bonus / increment set by Admin
     const override = await this.overrideModel.findOne({ date: dateStr }).exec();
+    let bonus8h = 0;
+    let reason: string | undefined;
+    let source: 'override' | 'employee_custom' | 'standard_default' = baseSource;
+
     if (override) {
-      return {
-        date: dateStr,
-        dayOfWeek,
-        isSunday,
-        rate8h: override.rate8h,
-        hourlyRate: override.rate8h / 8,
-        source: 'override',
-        reason: override.reason,
-      };
+      if (override.bonus8h !== undefined && override.bonus8h !== null) {
+        bonus8h = override.bonus8h;
+      } else if (override.rate8h !== undefined && override.rate8h !== null) {
+        bonus8h = Math.max(0, override.rate8h - RatesService.STANDARD_RATE);
+      }
+      reason = override.reason;
+      if (bonus8h > 0 || override.rate8h !== undefined) {
+        source = 'override';
+      }
     }
 
-    // 2. Check for employee-specific custom rate
-    if (customDailyRate && customDailyRate > 0) {
-      return {
-        date: dateStr,
-        dayOfWeek,
-        isSunday,
-        rate8h: customDailyRate,
-        hourlyRate: customDailyRate / 8,
-        source: 'employee_custom',
-      };
-    }
+    // 3. Effective rate is base rate + date bonus (applied equally to all days, including Sundays)
+    const effectiveRate8h = baseRate8h + bonus8h;
 
-    // 3. Sunday default (₹250)
-    if (isSunday) {
-      return {
-        date: dateStr,
-        dayOfWeek,
-        isSunday,
-        rate8h: RatesService.SUNDAY_RATE,
-        hourlyRate: RatesService.SUNDAY_RATE / 8,
-        source: 'sunday_default',
-      };
-    }
-
-    // 4. Standard default (₹240)
     return {
       date: dateStr,
       dayOfWeek,
       isSunday,
-      rate8h: RatesService.STANDARD_RATE,
-      hourlyRate: RatesService.STANDARD_RATE / 8,
-      source: 'standard_default',
+      baseRate8h,
+      bonus8h,
+      rate8h: effectiveRate8h,
+      hourlyRate: effectiveRate8h / 8,
+      source,
+      reason,
     };
   }
 
@@ -104,12 +97,24 @@ export class RatesService {
     dto: CreateDailyRateOverrideDto,
     adminName?: string,
   ): Promise<DailyRateOverride> {
+    const bonus8h =
+      dto.bonus8h !== undefined
+        ? dto.bonus8h
+        : dto.rate8h !== undefined
+          ? Math.max(0, dto.rate8h - RatesService.STANDARD_RATE)
+          : 0;
+    const rate8h =
+      dto.rate8h !== undefined
+        ? dto.rate8h
+        : RatesService.STANDARD_RATE + bonus8h;
+
     return this.overrideModel
       .findOneAndUpdate(
         { date: dto.date },
         {
           date: dto.date,
-          rate8h: dto.rate8h,
+          bonus8h,
+          rate8h,
           reason: dto.reason,
           setBy: adminName ?? 'admin',
         },

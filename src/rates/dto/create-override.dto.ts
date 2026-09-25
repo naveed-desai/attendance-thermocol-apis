@@ -8,10 +8,15 @@ export class CreateDailyRateOverrideDto {
   })
   date: string;
 
-  @IsNotEmpty()
+  @IsOptional()
+  @IsNumber()
+  @Min(0, { message: 'Daily bonus must be a non-negative number' })
+  bonus8h?: number;
+
+  @IsOptional()
   @IsNumber()
   @Min(0, { message: 'Rate must be a positive number' })
-  rate8h: number;
+  rate8h?: number;
 
   @IsOptional()
   @IsString()

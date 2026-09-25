@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   OnModuleInit,
   UnauthorizedException,
@@ -61,6 +62,10 @@ export class AuthService implements OnModuleInit {
 
   async login(dto: LoginDto) {
     const cleanPhone = dto.phone.trim();
+    if (!/^[0-9]{10}$/.test(cleanPhone)) {
+      throw new BadRequestException('Phone number must be exactly 10 digits');
+    }
+
     const employee = await this.employeeModel.findOne({ phone: cleanPhone }).exec();
 
     if (!employee || employee.password !== dto.password) {

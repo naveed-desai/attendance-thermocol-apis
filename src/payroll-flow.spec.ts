@@ -190,9 +190,9 @@ describe('End-to-End Workflow: Attendance, Dynamic Rates, Approvals & Full/Parti
     expect(mondayRate.rate8h).toBe(240);
     expect(mondayRate.isSunday).toBe(false);
 
-    // Sunday (2026-09-20) -> ₹250
+    // Sunday (2026-09-20) -> employee base rate ₹240 (no extra Sunday surcharge)
     const sundayRate = await ratesService.resolveRate('2026-09-20');
-    expect(sundayRate.rate8h).toBe(250);
+    expect(sundayRate.rate8h).toBe(240);
     expect(sundayRate.isSunday).toBe(true);
 
     // Overridden Day (2026-09-25) -> ₹300
@@ -222,7 +222,7 @@ describe('End-to-End Workflow: Attendance, Dynamic Rates, Approvals & Full/Parti
     expect(shiftB.hoursWorked).toBe(10);
     expect(shiftB.calculatedSalary).toBe(300);
 
-    // Shift C: Sunday Undertime, 6 hours (09:00 - 15:00) @ 250 Sunday rate -> (6/8)*250 = ₹187.50
+    // Shift C: Sunday Undertime, 6 hours (09:00 - 15:00) @ 240 employee rate -> (6/8)*240 = ₹180.00
     const shiftC = await attendanceService.create({
       employeeId,
       date: '2026-09-20',
@@ -231,7 +231,7 @@ describe('End-to-End Workflow: Attendance, Dynamic Rates, Approvals & Full/Parti
     });
     expect(shiftC.isSunday).toBe(true);
     expect(shiftC.hoursWorked).toBe(6);
-    expect(shiftC.calculatedSalary).toBe(187.5);
+    expect(shiftC.calculatedSalary).toBe(180);
 
     // Shift D: Festival Shift, 8 hours (09:00 - 17:00) @ 300 override rate -> ₹300.00
     const shiftD = await attendanceService.create({
@@ -262,11 +262,11 @@ describe('End-to-End Workflow: Attendance, Dynamic Rates, Approvals & Full/Parti
     });
 
     // 4. Verify Ledger Before Settlement
-    // Total Approved = Shift A (240) + Shift B (300) + Shift C (187.50) = ₹727.50
+    // Total Approved = Shift A (240) + Shift B (300) + Shift C (180) = ₹720.00
     const summaryBefore = await payrollService.getEmployeeSummary(employeeId);
-    expect(summaryBefore.totalApprovedEarnings).toBe(727.5);
+    expect(summaryBefore.totalApprovedEarnings).toBe(720);
     expect(summaryBefore.totalPaid).toBe(0);
-    expect(summaryBefore.netUnpaidBalance).toBe(727.5);
+    expect(summaryBefore.netUnpaidBalance).toBe(720);
     expect(summaryBefore.approvedUnpaidCount).toBe(3);
 
     // 5. Admin Executes Partial Payout of ₹300
@@ -279,29 +279,29 @@ describe('End-to-End Workflow: Attendance, Dynamic Rates, Approvals & Full/Parti
     });
 
     expect(partialPayout.amountPaid).toBe(300);
-    expect(partialPayout.balanceBefore).toBe(727.5);
-    expect(partialPayout.balanceAfter).toBe(427.5);
+    expect(partialPayout.balanceBefore).toBe(720);
+    expect(partialPayout.balanceAfter).toBe(420);
 
-    // Shift C (chronologically earliest: 2026-09-20, ₹187.50) is fully covered by ₹300, so it is marked PAID
+    // Shift C (chronologically earliest: 2026-09-20, ₹180) is fully covered by ₹300, so it is marked PAID
     expect(shiftC.paymentStatus).toBe(PaymentStatus.PAID);
 
     // 6. Verify Summary After Partial Settlement
     const summaryAfterPartial = await payrollService.getEmployeeSummary(employeeId);
-    expect(summaryAfterPartial.totalApprovedEarnings).toBe(727.5);
+    expect(summaryAfterPartial.totalApprovedEarnings).toBe(720);
     expect(summaryAfterPartial.totalPaid).toBe(300);
-    expect(summaryAfterPartial.netUnpaidBalance).toBe(427.5);
+    expect(summaryAfterPartial.netUnpaidBalance).toBe(420);
 
-    // 7. Admin Executes Full Settlement for the Remaining ₹427.50
+    // 7. Admin Executes Full Settlement for the Remaining ₹420.00
     const fullPayout = await payrollService.settle({
       employeeId,
-      amountPaid: 427.5,
+      amountPaid: 420,
       paymentType: PaymentType.FULL,
       paymentMethod: 'bank_transfer',
       note: 'Final settlement of remaining balance',
     });
 
-    expect(fullPayout.amountPaid).toBe(427.5);
-    expect(fullPayout.balanceBefore).toBe(427.5);
+    expect(fullPayout.amountPaid).toBe(420);
+    expect(fullPayout.balanceBefore).toBe(420);
     expect(fullPayout.balanceAfter).toBe(0);
 
     // All approved shifts are now marked PAID
@@ -311,8 +311,8 @@ describe('End-to-End Workflow: Attendance, Dynamic Rates, Approvals & Full/Parti
 
     // 8. Verify Ledger is Fully Settled
     const summaryFinal = await payrollService.getEmployeeSummary(employeeId);
-    expect(summaryFinal.totalApprovedEarnings).toBe(727.5);
-    expect(summaryFinal.totalPaid).toBe(727.5);
+    expect(summaryFinal.totalApprovedEarnings).toBe(720);
+    expect(summaryFinal.totalPaid).toBe(720);
     expect(summaryFinal.netUnpaidBalance).toBe(0);
     expect(summaryFinal.approvedUnpaidCount).toBe(0);
     expect(summaryFinal.payouts.length).toBe(2);

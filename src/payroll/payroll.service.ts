@@ -69,12 +69,12 @@ export class PayrollService {
 
     for (const record of attendanceRecords) {
       if (record.status === AttendanceStatus.APPROVED) {
-        totalApprovedEarnings += record.calculatedSalary || 0;
+        totalApprovedEarnings += Math.floor(record.calculatedSalary || 0);
         if (record.paymentStatus === PaymentStatus.UNPAID) {
           approvedUnpaidCount++;
         }
       } else if (record.status === AttendanceStatus.PENDING) {
-        pendingEarnings += record.calculatedSalary || 0;
+        pendingEarnings += Math.floor(record.calculatedSalary || 0);
         pendingCount++;
       }
     }

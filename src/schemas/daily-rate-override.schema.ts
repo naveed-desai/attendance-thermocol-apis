@@ -9,9 +9,13 @@ export class DailyRateOverride {
   @Prop({ required: true, unique: true, index: true })
   date: string;
 
-  // Rate for 8 hours in INR (₹)
-  @Prop({ required: true, type: Number })
-  rate8h: number;
+  // Daily bonus / increment amount in INR (₹) added to each employee's base daily wage
+  @Prop({ required: false, type: Number, default: 0 })
+  bonus8h?: number;
+
+  // Optional legacy rate for 8 hours in INR (₹)
+  @Prop({ required: false, type: Number })
+  rate8h?: number;
 
   @Prop({ required: false, trim: true })
   reason?: string;

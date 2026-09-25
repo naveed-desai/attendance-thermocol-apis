@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
 } from 'class-validator';
 import { Role } from '../../schemas/employee.schema.js';
@@ -29,6 +30,7 @@ export class UpdateEmployeeDto {
 
   @IsOptional()
   @IsString()
+  @Matches(/^[0-9]{10}$/, { message: 'Phone number must be exactly 10 digits' })
   phone?: string;
 
   @IsOptional()

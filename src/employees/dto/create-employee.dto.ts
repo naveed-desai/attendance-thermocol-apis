@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
 } from 'class-validator';
 import { Role } from '../../schemas/employee.schema.js';
@@ -14,9 +15,10 @@ export class CreateEmployeeDto {
   @IsString()
   name: string;
 
-  // Phone number is mandatory
-  @IsNotEmpty()
+  // Phone number is mandatory (strictly 10 digits)
+  @IsNotEmpty({ message: 'Phone number is required' })
   @IsString()
+  @Matches(/^[0-9]{10}$/, { message: 'Phone number must be exactly 10 digits' })
   phone: string;
 
   // Email is optional

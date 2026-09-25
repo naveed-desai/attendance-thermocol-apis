@@ -56,13 +56,70 @@ export class AttendanceService {
     return 0;
   }
 
+  roundTimeTo5Min(timeStr: string, mode: 'ceil' | 'floor'): string {
+    if (!timeStr) return timeStr;
+    const cleaned = timeStr.trim();
+    const match12 = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)$/i);
+    if (match12) {
+      let hours = parseInt(match12[1], 10);
+      const minutes = parseInt(match12[2], 10);
+      const period = match12[3].toUpperCase();
+      let hours24 = hours;
+      if (period === 'PM' && hours24 < 12) hours24 += 12;
+      if (period === 'AM' && hours24 === 12) hours24 = 0;
+      let totalMinutes = hours24 * 60 + minutes;
+
+      const rem = totalMinutes % 5;
+      if (rem !== 0) {
+        if (mode === 'ceil') {
+          totalMinutes += 5 - rem;
+        } else {
+          totalMinutes -= rem;
+        }
+      }
+
+      totalMinutes = totalMinutes % (24 * 60);
+      const h24 = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      const p = h24 >= 12 ? 'PM' : 'AM';
+      const h12 = h24 % 12 || 12;
+      return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${p}`;
+    }
+
+    const match24 = cleaned.match(/^(\d{1,2}):(\d{2})$/);
+    if (match24) {
+      const hours = parseInt(match24[1], 10);
+      const minutes = parseInt(match24[2], 10);
+      let totalMinutes = hours * 60 + minutes;
+
+      const rem = totalMinutes % 5;
+      if (rem !== 0) {
+        if (mode === 'ceil') {
+          totalMinutes += 5 - rem;
+        } else {
+          totalMinutes -= rem;
+        }
+      }
+
+      totalMinutes = totalMinutes % (24 * 60);
+      const h24 = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      return `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    return timeStr;
+  }
+
   calculateWorkMetrics(
     startTime: string,
     endTime: string,
     dailyRate8h: number,
   ) {
-    const startTotal = this.parseTimeToMinutes(startTime);
-    const endTotal = this.parseTimeToMinutes(endTime);
+    const roundedStartTime = this.roundTimeTo5Min(startTime, 'ceil');
+    const roundedEndTime = this.roundTimeTo5Min(endTime, 'floor');
+
+    const startTotal = this.parseTimeToMinutes(roundedStartTime);
+    const endTotal = this.parseTimeToMinutes(roundedEndTime);
 
     let durationMinutes = endTotal - startTotal;
     if (durationMinutes < 0) {
@@ -77,11 +134,17 @@ export class AttendanceService {
     }
 
     const hoursWorked = Math.round((durationMinutes / 60) * 100) / 100;
-    // Overtime / undertime proportional rate: (durationMinutes / 480) * dailyRate8h
+    // Floor salary on daily basis to prevent .50 or decimal amounts in DB
     const calculatedSalary =
-      Math.round(((durationMinutes / 480) * dailyRate8h) * 100) / 100;
+      Math.floor((durationMinutes / 480) * dailyRate8h);
 
-    return { durationMinutes, hoursWorked, calculatedSalary };
+    return {
+      durationMinutes,
+      hoursWorked,
+      calculatedSalary,
+      roundedStartTime,
+      roundedEndTime,
+    };
   }
 
   async create(dto: CreateAttendanceDto): Promise<Attendance> {
@@ -110,7 +173,7 @@ export class AttendanceService {
           dto.endTime,
           existing.dailyRate8h,
         );
-        existing.endTime = dto.endTime;
+        existing.endTime = metrics.roundedEndTime;
         existing.durationMinutes = metrics.durationMinutes;
         existing.hoursWorked = metrics.hoursWorked;
         existing.calculatedSalary = metrics.calculatedSalary;
@@ -132,16 +195,19 @@ export class AttendanceService {
       dailyRate8h = resolvedRate.rate8h;
     }
 
+    const roundedStartTime = this.roundTimeTo5Min(dto.startTime, 'ceil');
+    let roundedEndTime: string | undefined = undefined;
     let durationMinutes = 0;
     let hoursWorked = 0;
     let calculatedSalary = 0;
 
     if (dto.endTime) {
       const metrics = this.calculateWorkMetrics(
-        dto.startTime,
+        roundedStartTime,
         dto.endTime,
         dailyRate8h,
       );
+      roundedEndTime = metrics.roundedEndTime;
       durationMinutes = metrics.durationMinutes;
       hoursWorked = metrics.hoursWorked;
       calculatedSalary = metrics.calculatedSalary;
@@ -152,8 +218,8 @@ export class AttendanceService {
       date: dto.date,
       dayOfWeek: resolvedRate.dayOfWeek,
       isSunday: resolvedRate.isSunday,
-      startTime: dto.startTime,
-      endTime: dto.endTime,
+      startTime: roundedStartTime,
+      endTime: roundedEndTime,
       durationMinutes,
       hoursWorked,
       dailyRate8h,
@@ -278,7 +344,7 @@ export class AttendanceService {
       attendance.dailyRate8h,
     );
 
-    attendance.endTime = endTime;
+    attendance.endTime = metrics.roundedEndTime;
     attendance.durationMinutes = metrics.durationMinutes;
     attendance.hoursWorked = metrics.hoursWorked;
     attendance.calculatedSalary = metrics.calculatedSalary;
